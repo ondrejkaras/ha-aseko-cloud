@@ -40,7 +40,7 @@ def _api_key_id(api_key: str) -> str:
 
 
 class AsekoCloudConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle the config and reauth flow for Aseko Cloud."""
+    """Handle the config, reauth and reconfigure flows for Aseko Cloud."""
 
     VERSION = 1
 
@@ -91,6 +91,34 @@ class AsekoCloudConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
         return self.async_show_form(
             step_id="reauth_confirm",
+            data_schema=STEP_API_KEY_SCHEMA,
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Replace the API key of an existing entry without removing it."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"url": API_KEYS_URL}
+        if user_input is not None:
+            error, message = await self._async_validate(user_input[CONF_API_KEY])
+            if error:
+                errors["base"] = error
+                if message:
+                    placeholders["error"] = message
+            else:
+                unique_id = _api_key_id(user_input[CONF_API_KEY])
+                await self.async_set_unique_id(unique_id)
+                if unique_id != entry.unique_id:
+                    self._abort_if_unique_id_configured()
+                return self.async_update_reload_and_abort(
+                    entry, unique_id=unique_id, data_updates=user_input
+                )
+        return self.async_show_form(
+            step_id="reconfigure",
             data_schema=STEP_API_KEY_SCHEMA,
             errors=errors,
             description_placeholders=placeholders,
